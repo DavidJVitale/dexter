@@ -1,0 +1,33 @@
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+logs/
+*.egg-info/
+package-lock.json
+frontend/node_modules/
+frontend/package-lock.json
+frontend/dist/
+*.lock
+PRODUCTION_ENV.env
+
+# Local agent/developer machine env
+CODING_AGENT_ENV.env
+.deploy*
+
+# macOS / OS noise
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor / tooling noise
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+Thumbs.db

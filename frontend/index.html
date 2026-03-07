@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dexter v0.1</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Dexter Local Assistant</h1>
+      <p class="subtitle">Milestone 1 scaffold: Socket.IO + stubbed pipeline</p>
+
+      <section class="panel">
+        <div class="row">
+          <span>State:</span>
+          <span id="state-pill" class="state idle">idle</span>
+        </div>
+        <div class="row">
+          <span>Current Request:</span>
+          <code id="request-id">none</code>
+        </div>
+      </section>
+
+      <section class="panel controls">
+        <button id="enable-mic">Enable Mic</button>
+        <button id="start-capture">Start Capture</button>
+        <button id="stop-capture">Stop Capture</button>
+        <button id="abort-capture">Abort</button>
+      </section>
+
+      <section class="panel">
+        <h2>Transcript</h2>
+        <pre id="transcript">(none)</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Response</h2>
+        <pre id="response-text">(none)</pre>
+        <audio id="response-audio" controls></audio>
+      </section>
+
+      <section class="panel">
+        <h2>Event Log</h2>
+        <pre id="event-log"></pre>
+      </section>
+    </main>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

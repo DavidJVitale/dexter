@@ -30,6 +30,9 @@ Out of scope for v0.1:
 - Wake word primary path: `openWakeWord` in browser via WASM.
 - Backend must stay wake-engine-agnostic.
 - LLM: local MLX 24B 4-bit model (~12-13GB RAM observed).
+- LLM models available:
+  - `LiquidAI/LFM2-24B-A2B-MLX-4bit` (preferred default for v0.1)
+  - `LiquidAI/LFM2-24B-A2B-MLX-5bit` (optional quality-first variant)
 - STT: `mlx-whisper` medium to start.
 - TTS: local OSS engine (Piper preferred).
 - Priority: lower latency over maximum transcription/response quality.
@@ -102,6 +105,20 @@ To reduce startup and per-turn latency:
 - Keep STT/LLM/TTS loaded in process for session duration.
 - Single in-flight pipeline per browser session for v0.1.
 - Reject/queue overlapping `stop_capture` events while processing.
+- Follow existing local MLX pattern from `local_inference_helpers/mlx`:
+  - load once (`mlx_lm.load`) and reuse
+  - generate per request (`mlx_lm.generate`) with low-latency defaults
+  - expose lightweight timing/memory metrics for tuning
+
+## Python Environment and Model Cache Policy
+
+- Dexter will use its own dedicated virtual environment at `dexter/.venv`.
+- Dexter should not reuse the standalone `mlx_env` as its runtime environment.
+- Model weights remain shared through Hugging Face cache, so creating a new venv does not duplicate model files.
+- Default cache location observed:
+  - `HF_HOME=/Users/davidjvitale/.cache/huggingface`
+  - `HF_HUB_CACHE=/Users/davidjvitale/.cache/huggingface/hub`
+- If needed, set these env vars in Dexter run scripts to force shared cache usage across environments.
 
 ## Assistant State Machine
 
