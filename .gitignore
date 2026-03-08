@@ -31,3 +31,5 @@ CODING_AGENT_ENV.env
 .vscode/
 .idea/
 Thumbs.db
+
+ai_docs/deepcorelabs_openwake_reference_files/
