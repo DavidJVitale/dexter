@@ -5,5 +5,6 @@ export function createSocketClient() {
   const backendOrigin = `${window.location.protocol}//${window.location.hostname}:5000`;
   return window.io(backendOrigin, {
     transports: ["polling"],
+    withCredentials: false,
   });
 }

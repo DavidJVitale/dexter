@@ -63,7 +63,17 @@ def create_app() -> Flask:
 
 
 def create_socketio(app: Flask) -> SocketIO:
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+    socketio = SocketIO(
+        app,
+        async_mode="threading",
+        cors_allowed_origins=[
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+            "http://127.0.0.1:5000",
+            "http://localhost:5000",
+        ],
+        cors_credentials=False,
+    )
     register_socket_events(socketio)
     return socketio
 

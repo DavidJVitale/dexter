@@ -24,20 +24,38 @@ let wakewordSessions = {};
 let melBuffer = [];
 let embeddingBuffer = [];
 let thresholds = {
-  dexter_start: 0.55,
-  dexter_stop: 0.6,
-  dexter_abort: 0.6,
+  dexter_start: 0.56,
+  dexter_stop: 0.66,
+  dexter_abort: 0.66,
 };
 let cooldownMs = {
   dexter_start: 1000,
   dexter_stop: 1000,
   dexter_abort: 1000,
 };
+let patienceFrames = {
+  dexter_start: 2,
+  dexter_stop: 2,
+  dexter_abort: 2,
+};
+let warmupMs = 1500;
 let lastHitMs = {
   dexter_start: 0,
   dexter_stop: 0,
   dexter_abort: 0,
 };
+let aboveThresholdFrames = {
+  dexter_start: 0,
+  dexter_stop: 0,
+  dexter_abort: 0,
+};
+let peakScores = {
+  dexter_start: 0,
+  dexter_stop: 0,
+  dexter_abort: 0,
+};
+let sessionStartMs = 0;
+let inferenceWindows = 0;
 
 function postError(code, message, detail = null) {
   self.postMessage({
@@ -49,6 +67,18 @@ function postError(code, message, detail = null) {
 function resetState() {
   melBuffer = [];
   embeddingBuffer = [];
+  inferenceWindows = 0;
+  sessionStartMs = Date.now();
+  aboveThresholdFrames = {
+    dexter_start: 0,
+    dexter_stop: 0,
+    dexter_abort: 0,
+  };
+  peakScores = {
+    dexter_start: 0,
+    dexter_stop: 0,
+    dexter_abort: 0,
+  };
   for (let i = 0; i < 16; i += 1) {
     embeddingBuffer.push(new Float32Array(96));
   }
@@ -82,6 +112,8 @@ async function initSessions(config) {
 
   thresholds = { ...thresholds, ...(config.thresholds || {}) };
   cooldownMs = { ...cooldownMs, ...(config.cooldownMs || {}) };
+  patienceFrames = { ...patienceFrames, ...(config.patienceFrames || {}) };
+  warmupMs = Number.isFinite(config.warmupMs) ? config.warmupMs : warmupMs;
   resetState();
 }
 
@@ -124,14 +156,48 @@ async function runInference(chunk) {
       dexter_stop: 0,
       dexter_abort: 0,
     };
+    const nowMs = Date.now();
+    const warmedUp = nowMs - sessionStartMs >= warmupMs;
+    const abovePayload = {
+      dexter_start: false,
+      dexter_stop: false,
+      dexter_abort: false,
+    };
 
     for (const [label, session] of Object.entries(wakewordSessions)) {
       const outputMap = await session.run({ [session.inputNames[0]]: wakewordInput });
       const score = Number(outputMap[session.outputNames[0]].data[0] || 0);
       scorePayload[label] = score;
+      if (score > peakScores[label]) {
+        peakScores[label] = score;
+      }
+      if (score >= 0.35) {
+        self.postMessage({
+          type: 'trace',
+          payload: {
+            ts: nowMs,
+            label,
+            score,
+            threshold: thresholds[label],
+            aboveThresholdFrames: aboveThresholdFrames[label],
+            warmedUp,
+          },
+        });
+      }
 
-      const nowMs = Date.now();
-      if (score > thresholds[label] && nowMs - lastHitMs[label] >= cooldownMs[label]) {
+      if (score > thresholds[label]) {
+        aboveThresholdFrames[label] += 1;
+        abovePayload[label] = true;
+      } else {
+        aboveThresholdFrames[label] = 0;
+      }
+
+      const patienceSatisfied = aboveThresholdFrames[label] >= patienceFrames[label];
+      if (
+        warmedUp &&
+        patienceSatisfied &&
+        nowMs - lastHitMs[label] >= cooldownMs[label]
+      ) {
         lastHitMs[label] = nowMs;
         self.postMessage({
           type: 'hit',
@@ -143,10 +209,31 @@ async function runInference(chunk) {
     self.postMessage({
       type: 'score',
       payload: {
-        ts: Date.now(),
+        ts: nowMs,
+        inferenceWindows,
         scores: scorePayload,
+        peaks: { ...peakScores },
       },
     });
+    inferenceWindows += 1;
+
+    if (inferenceWindows % 5 === 0) {
+      self.postMessage({
+        type: 'debug',
+        payload: {
+          ts: nowMs,
+          warmedUp,
+          warmupRemainingMs: Math.max(0, warmupMs - (nowMs - sessionStartMs)),
+          inferenceWindows,
+          melBufferLen: melBuffer.length,
+          aboveThresholdFrames: { ...aboveThresholdFrames },
+          aboveThreshold: abovePayload,
+          thresholds: { ...thresholds },
+          peaks: { ...peakScores },
+          scores: scorePayload,
+        },
+      });
+    }
 
     melBuffer.splice(0, 8);
   }

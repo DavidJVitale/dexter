@@ -58,15 +58,21 @@ export class OpenWakeWordAdapter {
           dexter_abort: `${backendOrigin}/models/wakewords/dexter_abort.onnx`,
         },
         thresholds: {
-          dexter_start: 0.55,
-          dexter_stop: 0.6,
-          dexter_abort: 0.6,
+          dexter_start: 0.56,
+          dexter_stop: 0.66,
+          dexter_abort: 0.66,
         },
         cooldownMs: {
           dexter_start: 1000,
           dexter_stop: 1000,
           dexter_abort: 1000,
         },
+        patienceFrames: {
+          dexter_start: 2,
+          dexter_stop: 2,
+          dexter_abort: 2,
+        },
+        warmupMs: 1500,
       },
     });
 

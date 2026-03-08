@@ -137,6 +137,10 @@ wakeword.on("hit", (payload) => {
   }
 });
 
+wakeword.on("trace", (payload) => {
+  logEvent("wakeword_trace", payload);
+});
+
 wakeword.on("error", (payload) => {
   logEvent("wakeword_error", payload);
 });
