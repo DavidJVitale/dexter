@@ -1,0 +1,263 @@
+{
+  "benchmark": "openwakeword_wav_benchmark_temp_v1",
+  "generated_at_epoch": 1772931427,
+  "elapsed_sec": 0.652,
+  "files": [
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/dexter_start.wav",
+      "expected": "dexter_start",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 1.94,
+      "winner_by_peak": "dexter_start",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.67445969581604,
+          "mean": 0.06023024022579193,
+          "p95": 0.441143661737442,
+          "peak_frame": 19,
+          "n": 25
+        },
+        "dexter_stop": {
+          "peak": 0.016690045595169067,
+          "mean": 0.001914397464133799,
+          "p95": 0.01091536320745945,
+          "peak_frame": 17,
+          "n": 25
+        },
+        "dexter_abort": {
+          "peak": 0.0011342167854309082,
+          "mean": 0.0005124378367327154,
+          "p95": 0.0009565651416778564,
+          "peak_frame": 18,
+          "n": 25
+        }
+      }
+    },
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/dexter_start2.wav",
+      "expected": "dexter_start",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 1.876,
+      "winner_by_peak": "dexter_start",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.5631030201911926,
+          "mean": 0.06968939304351807,
+          "p95": 0.3262617290019989,
+          "peak_frame": 20,
+          "n": 24
+        },
+        "dexter_stop": {
+          "peak": 0.0139847993850708,
+          "mean": 0.0017894444754347205,
+          "p95": 0.008965583518147469,
+          "peak_frame": 18,
+          "n": 24
+        },
+        "dexter_abort": {
+          "peak": 0.0010546445846557617,
+          "mean": 0.0004998259246349335,
+          "p95": 0.0008713826537132263,
+          "peak_frame": 18,
+          "n": 24
+        }
+      }
+    },
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/dexter_stop.wav",
+      "expected": "dexter_stop",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 1.7053,
+      "winner_by_peak": "dexter_stop",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.15844586491584778,
+          "mean": 0.021312357857823372,
+          "p95": 0.148336723446846,
+          "peak_frame": 18,
+          "n": 22
+        },
+        "dexter_stop": {
+          "peak": 0.7024112343788147,
+          "mean": 0.10737545043230057,
+          "p95": 0.6187586784362793,
+          "peak_frame": 17,
+          "n": 22
+        },
+        "dexter_abort": {
+          "peak": 0.0008716881275177002,
+          "mean": 0.0004912438453175128,
+          "p95": 0.0007155954954214394,
+          "peak_frame": 17,
+          "n": 22
+        }
+      }
+    },
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/dexter_stop2.wav",
+      "expected": "dexter_stop",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 1.812,
+      "winner_by_peak": "dexter_stop",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.32470911741256714,
+          "mean": 0.022658860310912132,
+          "p95": 0.09343685209751129,
+          "peak_frame": 21,
+          "n": 23
+        },
+        "dexter_stop": {
+          "peak": 0.41374120116233826,
+          "mean": 0.0330997034907341,
+          "p95": 0.1936422437429428,
+          "peak_frame": 20,
+          "n": 23
+        },
+        "dexter_abort": {
+          "peak": 0.0006691515445709229,
+          "mean": 0.0004698439734056592,
+          "p95": 0.0006586879608221352,
+          "peak_frame": 21,
+          "n": 23
+        }
+      }
+    },
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/dexter_abort.wav",
+      "expected": "dexter_abort",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 1.5347,
+      "winner_by_peak": "dexter_abort",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.0008862614631652832,
+          "mean": 0.0005124419694766402,
+          "p95": 0.000851522374432534,
+          "peak_frame": 17,
+          "n": 20
+        },
+        "dexter_stop": {
+          "peak": 0.0008695125579833984,
+          "mean": 0.000557021819986403,
+          "p95": 0.0008673042175360024,
+          "peak_frame": 19,
+          "n": 20
+        },
+        "dexter_abort": {
+          "peak": 0.7256914377212524,
+          "mean": 0.09990037977695465,
+          "p95": 0.7064111828804016,
+          "peak_frame": 19,
+          "n": 20
+        }
+      }
+    },
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/dexter_abort2.wav",
+      "expected": "dexter_abort",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 2.004,
+      "winner_by_peak": "dexter_abort",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.001327812671661377,
+          "mean": 0.0006015931139700115,
+          "p95": 0.0011259987950325012,
+          "peak_frame": 20,
+          "n": 26
+        },
+        "dexter_stop": {
+          "peak": 0.0016254782676696777,
+          "mean": 0.0006861434667371213,
+          "p95": 0.0011496394872665405,
+          "peak_frame": 20,
+          "n": 26
+        },
+        "dexter_abort": {
+          "peak": 0.8976035118103027,
+          "mean": 0.15390458703041077,
+          "p95": 0.8941143751144409,
+          "peak_frame": 23,
+          "n": 26
+        }
+      }
+    },
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/unrelated.wav",
+      "expected": "unrelated",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 1.6413,
+      "winner_by_peak": "dexter_stop",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.00064811110496521,
+          "mean": 0.00047759641893208027,
+          "p95": 0.0006405115127563477,
+          "peak_frame": 8,
+          "n": 21
+        },
+        "dexter_stop": {
+          "peak": 0.0008584260940551758,
+          "mean": 0.0005547929322347045,
+          "p95": 0.0008116960525512695,
+          "peak_frame": 7,
+          "n": 21
+        },
+        "dexter_abort": {
+          "peak": 0.0005916357040405273,
+          "mean": 0.0004336110141593963,
+          "p95": 0.0005900859832763672,
+          "peak_frame": 8,
+          "n": 21
+        }
+      }
+    },
+    {
+      "file": "/Users/davidjvitale/workspace/dexter/ai_docs/deepcorelabs_openwake_reference_files/unrelated2.wav",
+      "expected": "unrelated",
+      "sample_rate_input": 48000,
+      "sample_rate_runtime": 16000,
+      "chunk_samples": 1280,
+      "duration_sec_16k": 1.7693,
+      "winner_by_peak": "dexter_stop",
+      "scores": {
+        "dexter_start": {
+          "peak": 0.0007101595401763916,
+          "mean": 0.00050071143778041,
+          "p95": 0.0006776750087738037,
+          "peak_frame": 10,
+          "n": 23
+        },
+        "dexter_stop": {
+          "peak": 0.0007946491241455078,
+          "mean": 0.0005601424491032958,
+          "p95": 0.0007782519096508622,
+          "peak_frame": 10,
+          "n": 23
+        },
+        "dexter_abort": {
+          "peak": 0.0006096959114074707,
+          "mean": 0.0004529590078163892,
+          "p95": 0.0005990743520669639,
+          "peak_frame": 22,
+          "n": 23
+        }
+      }
+    }
+  ]
+}

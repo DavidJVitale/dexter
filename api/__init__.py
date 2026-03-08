@@ -1,3 +1,3 @@
-from .main import app, socketio
+"""Dexter API package."""
 
-__all__ = ["app", "socketio"]
+__all__: list[str] = []

@@ -7,6 +7,7 @@ __pycache__/
 logs/
 *.egg-info/
 package-lock.json
+node_modules/
 frontend/node_modules/
 frontend/package-lock.json
 frontend/dist/

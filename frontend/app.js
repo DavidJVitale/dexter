@@ -15,6 +15,7 @@ const stopButton = document.getElementById("stop-capture");
 const abortButton = document.getElementById("abort-capture");
 
 let currentRequestId = null;
+let currentState = "idle";
 
 function makeRequestId() {
   if (crypto.randomUUID) {
@@ -29,8 +30,41 @@ function logEvent(type, payload) {
 }
 
 function setState(state) {
+  currentState = state;
   statePill.textContent = state;
   statePill.className = `state ${state}`;
+}
+
+function beginCapture(trigger = "manual") {
+  if (currentState === "listening") {
+    return;
+  }
+  currentRequestId = makeRequestId();
+  requestIdEl.textContent = currentRequestId;
+  transcriptEl.textContent = "(none)";
+  responseTextEl.textContent = "(none)";
+
+  audioCapture.startCapture();
+  socket.emit("start_capture", { session_id: socket.id, request_id: currentRequestId });
+  logEvent("start_capture", { request_id: currentRequestId, trigger });
+}
+
+function stopCapture(trigger = "manual") {
+  if (!currentRequestId || currentState !== "listening") {
+    return;
+  }
+  audioCapture.stopCapture();
+  socket.emit("stop_capture", { request_id: currentRequestId });
+  logEvent("stop_capture", { request_id: currentRequestId, trigger });
+}
+
+function abortCapture(trigger = "manual") {
+  if (!currentRequestId) {
+    return;
+  }
+  audioCapture.stopCapture();
+  socket.emit("abort_capture", { request_id: currentRequestId, reason: "wakeword_abort" });
+  logEvent("abort_capture", { request_id: currentRequestId, trigger });
 }
 
 const socket = createSocketClient();
@@ -80,28 +114,41 @@ socket.on("error", (payload) => {
 enableMicButton.addEventListener("click", async () => {
   await wakeword.initialize();
   await audioCapture.initialize();
+  await wakeword.start();
   logEvent("mic", { status: "enabled" });
 });
 
-startButton.addEventListener("click", () => {
-  currentRequestId = makeRequestId();
-  requestIdEl.textContent = currentRequestId;
-  transcriptEl.textContent = "(none)";
-  responseTextEl.textContent = "(none)";
+wakeword.on("ready", (payload) => {
+  logEvent("wakeword_ready", payload);
+});
 
-  audioCapture.startCapture();
-  socket.emit("start_capture", { session_id: socket.id, request_id: currentRequestId });
-  logEvent("start_capture", { request_id: currentRequestId });
+wakeword.on("hit", (payload) => {
+  logEvent("wakeword_hit", payload);
+  if (payload.label === "dexter_start") {
+    beginCapture("wakeword");
+    return;
+  }
+  if (payload.label === "dexter_stop") {
+    stopCapture("wakeword");
+    return;
+  }
+  if (payload.label === "dexter_abort") {
+    abortCapture("wakeword");
+  }
+});
+
+wakeword.on("error", (payload) => {
+  logEvent("wakeword_error", payload);
+});
+
+startButton.addEventListener("click", () => {
+  beginCapture("manual");
 });
 
 stopButton.addEventListener("click", () => {
-  audioCapture.stopCapture();
-  socket.emit("stop_capture", { request_id: currentRequestId });
-  logEvent("stop_capture", { request_id: currentRequestId });
+  stopCapture("manual");
 });
 
 abortButton.addEventListener("click", () => {
-  audioCapture.stopCapture();
-  socket.emit("abort_capture", { request_id: currentRequestId, reason: "manual_abort_debug" });
-  logEvent("abort_capture", { request_id: currentRequestId });
+  abortCapture("manual");
 });

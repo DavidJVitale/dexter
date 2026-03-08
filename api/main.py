@@ -4,7 +4,7 @@ import logging
 import os
 from pathlib import Path
 
-from flask import Flask, send_from_directory
+from flask import Flask, Response, send_from_directory
 from flask_socketio import SocketIO
 
 from .config import AppConfig
@@ -31,6 +31,7 @@ def create_app() -> Flask:
     _configure_logging(Path(config.log_dir))
 
     frontend_dir = Path(__file__).resolve().parents[1] / "frontend"
+    models_dir = Path(__file__).resolve().parents[1] / "models"
     app = Flask(
         __name__,
         static_folder=str(frontend_dir),
@@ -45,6 +46,17 @@ def create_app() -> Flask:
     @app.get("/frontend/<path:asset_path>")
     def frontend_asset(asset_path: str) -> object:
         return send_from_directory(frontend_dir, asset_path)
+
+    @app.get("/models/<path:model_path>")
+    def model_asset(model_path: str) -> object:
+        return send_from_directory(models_dir, model_path)
+
+    @app.after_request
+    def add_cors_headers(response: Response) -> Response:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        return response
 
     app.register_blueprint(health_bp)
     return app
@@ -64,4 +76,10 @@ if __name__ == "__main__":
     config = app.config["APP_CONFIG"]
     os.environ.setdefault("HF_HOME", config.hf_home)
     os.environ.setdefault("HUGGINGFACE_HUB_CACHE", config.hf_hub_cache)
-    socketio.run(app, host=config.host, port=config.port, debug=config.debug)
+    socketio.run(
+        app,
+        host=config.host,
+        port=config.port,
+        debug=config.debug,
+        allow_unsafe_werkzeug=True,
+    )

@@ -1,6 +1,1 @@
-export class OpenWakeWordAdapter {
-  async initialize() {
-    // Placeholder for Milestone 5: browser WASM openWakeWord integration.
-    return true;
-  }
-}
+export { OpenWakeWordAdapter } from './wakeword/wakeword_openwakeword_adapter.js';
