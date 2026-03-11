@@ -92,6 +92,14 @@ function applyMelTransform(source) {
   return out;
 }
 
+function expectedLabelFromFilename(name) {
+  const lower = String(name || '').toLowerCase();
+  if (lower.includes('start')) return 'dexter_start';
+  if (lower.includes('stop')) return 'dexter_stop';
+  if (lower.includes('abort')) return 'dexter_abort';
+  return 'unrelated';
+}
+
 async function initSessions(config) {
   if (!self.ort) {
     throw new Error(
@@ -117,7 +125,7 @@ async function initSessions(config) {
   resetState();
 }
 
-async function runInference(chunk) {
+async function runInference(chunk, emitEvents = true) {
   if (chunk.length !== FRAME_SIZE) {
     return;
   }
@@ -171,7 +179,7 @@ async function runInference(chunk) {
       if (score > peakScores[label]) {
         peakScores[label] = score;
       }
-      if (score >= 0.35) {
+      if (emitEvents && score >= 0.35) {
         self.postMessage({
           type: 'trace',
           payload: {
@@ -194,6 +202,7 @@ async function runInference(chunk) {
 
       const patienceSatisfied = aboveThresholdFrames[label] >= patienceFrames[label];
       if (
+        emitEvents &&
         warmedUp &&
         patienceSatisfied &&
         nowMs - lastHitMs[label] >= cooldownMs[label]
@@ -206,18 +215,20 @@ async function runInference(chunk) {
       }
     }
 
-    self.postMessage({
-      type: 'score',
-      payload: {
-        ts: nowMs,
-        inferenceWindows,
-        scores: scorePayload,
-        peaks: { ...peakScores },
-      },
-    });
+    if (emitEvents) {
+      self.postMessage({
+        type: 'score',
+        payload: {
+          ts: nowMs,
+          inferenceWindows,
+          scores: scorePayload,
+          peaks: { ...peakScores },
+        },
+      });
+    }
     inferenceWindows += 1;
 
-    if (inferenceWindows % 5 === 0) {
+    if (emitEvents && inferenceWindows % 5 === 0) {
       self.postMessage({
         type: 'debug',
         payload: {
@@ -237,6 +248,51 @@ async function runInference(chunk) {
 
     melBuffer.splice(0, 8);
   }
+}
+
+async function runBenchmarkSamples(files) {
+  const results = [];
+
+  for (const file of files) {
+    const samples = file.samples;
+    if (!(samples instanceof Float32Array)) {
+      throw new Error(`benchmark sample payload missing Float32Array for file=${file.name}`);
+    }
+    resetState();
+
+    for (let i = 0; i < samples.length; i += FRAME_SIZE) {
+      const chunk = new Float32Array(FRAME_SIZE);
+      const slice = samples.subarray(i, Math.min(i + FRAME_SIZE, samples.length));
+      chunk.set(slice, 0);
+      await runInference(chunk, false);
+    }
+
+    const peaks = { ...peakScores };
+    const winner = Object.entries(peaks).reduce((a, b) => (a[1] >= b[1] ? a : b))[0];
+    results.push({
+      file: file.name,
+      expected: expectedLabelFromFilename(file.name),
+      sampleRateInput: Number(file.sampleRateInput || 16000),
+      sampleRateRuntime: Number(file.sampleRateRuntime || 16000),
+      chunkSamples: FRAME_SIZE,
+      durationSec16k: Number((samples.length / 16000).toFixed(4)),
+      winnerByPeak: winner,
+      scores: {
+        dexter_start: { peak: peaks.dexter_start },
+        dexter_stop: { peak: peaks.dexter_stop },
+        dexter_abort: { peak: peaks.dexter_abort },
+      },
+    });
+  }
+
+  self.postMessage({
+    type: 'benchmark_result',
+    payload: {
+      benchmark: 'openwakeword_wasm_upload_benchmark_v1',
+      generatedAtEpoch: Math.floor(Date.now() / 1000),
+      files: results,
+    },
+  });
 }
 
 self.onmessage = async (event) => {
@@ -263,6 +319,18 @@ self.onmessage = async (event) => {
         return;
       }
       await runInference(frame);
+      return;
+    }
+
+    if (type === 'benchmark_samples') {
+      if (!melspecSession || !embeddingSession) {
+        return;
+      }
+      const files = payload?.files;
+      if (!Array.isArray(files) || files.length === 0) {
+        throw new Error('benchmark_samples payload requires a non-empty files array');
+      }
+      await runBenchmarkSamples(files);
     }
   } catch (error) {
     postError('WAKEWORD_WORKER_ERROR', error?.message || String(error), {

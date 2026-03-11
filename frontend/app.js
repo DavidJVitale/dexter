@@ -13,6 +13,8 @@ const enableMicButton = document.getElementById("enable-mic");
 const startButton = document.getElementById("start-capture");
 const stopButton = document.getElementById("stop-capture");
 const abortButton = document.getElementById("abort-capture");
+const benchmarkFilesInput = document.getElementById("benchmark-files");
+const runBenchmarkButton = document.getElementById("run-benchmark");
 
 let currentRequestId = null;
 let currentState = "idle";
@@ -112,7 +114,6 @@ socket.on("error", (payload) => {
 });
 
 enableMicButton.addEventListener("click", async () => {
-  await wakeword.initialize();
   await audioCapture.initialize();
   await wakeword.start();
   logEvent("mic", { status: "enabled" });
@@ -145,6 +146,15 @@ wakeword.on("error", (payload) => {
   logEvent("wakeword_error", payload);
 });
 
+wakeword.on("benchmark_result", (payload) => {
+  logEvent("wakeword_benchmark_result", payload);
+  try {
+    logEvent("wakeword_benchmark_json", JSON.parse(JSON.stringify(payload)));
+  } catch (_error) {
+    // no-op
+  }
+});
+
 startButton.addEventListener("click", () => {
   beginCapture("manual");
 });
@@ -156,3 +166,28 @@ stopButton.addEventListener("click", () => {
 abortButton.addEventListener("click", () => {
   abortCapture("manual");
 });
+
+runBenchmarkButton.addEventListener("click", async () => {
+  const files = Array.from(benchmarkFilesInput?.files || []);
+  if (files.length === 0) {
+    logEvent("wakeword_benchmark", { status: "no_files_selected" });
+    return;
+  }
+  await wakeword.initialize();
+  logEvent("wakeword_benchmark", { status: "started", files: files.map((f) => f.name) });
+  await wakeword.runWavBenchmark(files);
+});
+
+async function initializeOnPageLoad() {
+  try {
+    await wakeword.initialize();
+    logEvent("wakeword_init", { status: "ready" });
+  } catch (error) {
+    logEvent("wakeword_init", {
+      status: "error",
+      message: error?.message || String(error),
+    });
+  }
+}
+
+initializeOnPageLoad();
