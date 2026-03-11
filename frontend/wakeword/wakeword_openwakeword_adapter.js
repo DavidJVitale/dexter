@@ -17,6 +17,8 @@ export class OpenWakeWordAdapter {
     this.readyResolve = null;
     this.readyReject = null;
     this.decodeAudioContext = null;
+    this.goldenVectorsPromise = null;
+    this.goldenVectorsByName = null;
   }
 
   on(eventName, callback) {
@@ -91,6 +93,7 @@ export class OpenWakeWordAdapter {
           dexter_abort: 2,
         },
         warmupMs: 1500,
+        melHop: 5,
       },
     });
 
@@ -134,16 +137,92 @@ export class OpenWakeWordAdapter {
 
     const prepared = [];
     const transferList = [];
+    const goldenByName = await this.loadGoldenVectorsByName();
     for (const file of files) {
       const arrayBuffer = await file.arrayBuffer();
       const decoded = await this.decodeFileTo16kMonoFloat32(file.name, arrayBuffer);
+      const variants = [
+        {
+          variant: "js_prepared_mel_on",
+          sampleRateInput: decoded.sampleRateInput,
+          sampleRateRuntime: decoded.sampleRateRuntime,
+          samples: decoded.samples,
+          signalStats: this.computeSignalStats(decoded.samples, decoded.sampleRateRuntime),
+          inferenceOptions: { melTransform: true, trimLeadingSilence: false, frameStep: 1280 },
+        },
+        {
+          variant: "js_prepared_mel_off",
+          sampleRateInput: decoded.sampleRateInput,
+          sampleRateRuntime: decoded.sampleRateRuntime,
+          samples: decoded.samples.slice(0),
+          signalStats: this.computeSignalStats(decoded.samples, decoded.sampleRateRuntime),
+          inferenceOptions: { melTransform: false, trimLeadingSilence: false, frameStep: 1280 },
+        },
+        {
+          variant: "js_prepared_mel_on_step160",
+          sampleRateInput: decoded.sampleRateInput,
+          sampleRateRuntime: decoded.sampleRateRuntime,
+          samples: decoded.samples.slice(0),
+          signalStats: this.computeSignalStats(decoded.samples, decoded.sampleRateRuntime),
+          inferenceOptions: { melTransform: true, trimLeadingSilence: false, frameStep: 160 },
+        },
+      ];
+      transferList.push(decoded.samples.buffer);
+      transferList.push(variants[1].samples.buffer);
+      transferList.push(variants[2].samples.buffer);
+
+      const trimmed = this.trimLeadingSilencePcm16Float(decoded.samples, 1000);
+      if (trimmed.trimmedSampleCount > 0) {
+        variants.push({
+          variant: "js_prepared_mel_on_trim",
+          sampleRateInput: decoded.sampleRateInput,
+          sampleRateRuntime: decoded.sampleRateRuntime,
+          samples: trimmed.samples,
+          signalStats: this.computeSignalStats(trimmed.samples, decoded.sampleRateRuntime),
+          inferenceOptions: { melTransform: true, trimLeadingSilence: true, frameStep: 1280 },
+        });
+      }
+      if (trimmed.trimmedSampleCount > 0) {
+        transferList.push(trimmed.samples.buffer);
+      }
+
+      const golden = goldenByName?.[file.name];
+      if (golden) {
+        const goldenSamples = this.decodeBase64Int16ToFloat32(golden.pcm16LeBase64);
+        variants.push({
+          variant: "python_golden_pcm16_mel_on",
+          sampleRateInput: golden.sampleRateInput || 16000,
+          sampleRateRuntime: golden.sampleRateRuntime || 16000,
+          samples: goldenSamples,
+          signalStats: this.computeSignalStats(goldenSamples, golden.sampleRateRuntime || 16000),
+          inferenceOptions: { melTransform: true, trimLeadingSilence: false, frameStep: 1280 },
+        });
+        transferList.push(goldenSamples.buffer);
+        variants.push({
+          variant: "python_golden_pcm16_mel_off",
+          sampleRateInput: golden.sampleRateInput || 16000,
+          sampleRateRuntime: golden.sampleRateRuntime || 16000,
+          samples: goldenSamples.slice(0),
+          signalStats: this.computeSignalStats(goldenSamples, golden.sampleRateRuntime || 16000),
+          inferenceOptions: { melTransform: false, trimLeadingSilence: false, frameStep: 1280 },
+        });
+        transferList.push(variants[variants.length - 1].samples.buffer);
+        variants.push({
+          variant: "python_golden_pcm16_mel_on_step160",
+          sampleRateInput: golden.sampleRateInput || 16000,
+          sampleRateRuntime: golden.sampleRateRuntime || 16000,
+          samples: goldenSamples.slice(0),
+          signalStats: this.computeSignalStats(goldenSamples, golden.sampleRateRuntime || 16000),
+          inferenceOptions: { melTransform: true, trimLeadingSilence: false, frameStep: 160 },
+        });
+        transferList.push(variants[variants.length - 1].samples.buffer);
+      }
+
       prepared.push({
         name: file.name,
-        sampleRateInput: decoded.sampleRateInput,
-        sampleRateRuntime: decoded.sampleRateRuntime,
-        samples: decoded.samples,
+        expected: this.expectedLabelFromFilename(file.name),
+        variants,
       });
-      transferList.push(decoded.samples.buffer);
     }
 
     this.worker.postMessage(
@@ -171,6 +250,115 @@ export class OpenWakeWordAdapter {
       }
     }
     return this.decodeAudioContext;
+  }
+
+  expectedLabelFromFilename(name) {
+    const lower = String(name || "").toLowerCase();
+    if (lower.includes("start")) return "dexter_start";
+    if (lower.includes("stop")) return "dexter_stop";
+    if (lower.includes("abort")) return "dexter_abort";
+    return "unrelated";
+  }
+
+  async loadGoldenVectorsByName() {
+    if (this.goldenVectorsByName) {
+      return this.goldenVectorsByName;
+    }
+    if (!this.goldenVectorsPromise) {
+      this.goldenVectorsPromise = fetch("/wakeword/tests/wakeword_golden_pcm16.json")
+        .then((response) => {
+          if (!response.ok) {
+            return null;
+          }
+          return response.json();
+        })
+        .then((payload) => {
+          if (!payload?.files || !Array.isArray(payload.files)) {
+            return {};
+          }
+          const byName = {};
+          for (const item of payload.files) {
+            if (item?.name) {
+              byName[item.name] = item;
+            }
+          }
+          return byName;
+        })
+        .catch(() => ({}));
+    }
+    this.goldenVectorsByName = await this.goldenVectorsPromise;
+    return this.goldenVectorsByName;
+  }
+
+  decodeBase64Int16ToFloat32(base64) {
+    const raw = atob(base64);
+    const byteLen = raw.length;
+    const bytes = new Uint8Array(byteLen);
+    for (let i = 0; i < byteLen; i += 1) {
+      bytes[i] = raw.charCodeAt(i);
+    }
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const sampleCount = Math.floor(view.byteLength / 2);
+    const out = new Float32Array(sampleCount);
+    for (let i = 0; i < sampleCount; i += 1) {
+      out[i] = view.getInt16(i * 2, true);
+    }
+    return out;
+  }
+
+  computeSignalStats(samples, sampleRate) {
+    if (!samples || samples.length === 0) {
+      return {
+        sampleCount: 0,
+        durationSec: 0,
+        rms: 0,
+        peakAbs: 0,
+        p95Abs: 0,
+        leadingSilenceSecThr1000: 0,
+      };
+    }
+    let sumSq = 0;
+    let peakAbs = 0;
+    const abs = new Float32Array(samples.length);
+    let firstAbove = -1;
+    for (let i = 0; i < samples.length; i += 1) {
+      const v = samples[i];
+      sumSq += v * v;
+      const a = Math.abs(v);
+      abs[i] = a;
+      if (a > peakAbs) peakAbs = a;
+      if (firstAbove < 0 && a >= 1000) {
+        firstAbove = i;
+      }
+    }
+    abs.sort();
+    const p95 = abs[Math.min(abs.length - 1, Math.floor(abs.length * 0.95))];
+    return {
+      sampleCount: samples.length,
+      durationSec: Number((samples.length / sampleRate).toFixed(4)),
+      rms: Math.sqrt(sumSq / samples.length),
+      peakAbs,
+      p95Abs: p95,
+      leadingSilenceSecThr1000:
+        firstAbove >= 0 ? Number((firstAbove / sampleRate).toFixed(4)) : Number((samples.length / sampleRate).toFixed(4)),
+    };
+  }
+
+  trimLeadingSilencePcm16Float(samples, thresholdAbs) {
+    let firstAbove = -1;
+    for (let i = 0; i < samples.length; i += 1) {
+      if (Math.abs(samples[i]) >= thresholdAbs) {
+        firstAbove = i;
+        break;
+      }
+    }
+    if (firstAbove <= 0) {
+      return { samples: samples.slice(0), trimmedSampleCount: 0 };
+    }
+    return {
+      samples: samples.slice(firstAbove),
+      trimmedSampleCount: firstAbove,
+    };
   }
 
   async decodeFileTo16kMonoFloat32(_name, arrayBuffer) {

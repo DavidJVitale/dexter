@@ -39,6 +39,7 @@ let patienceFrames = {
   dexter_abort: 2,
 };
 let warmupMs = 1500;
+let defaultMelHop = 8;
 let lastHitMs = {
   dexter_start: 0,
   dexter_stop: 0,
@@ -92,12 +93,45 @@ function applyMelTransform(source) {
   return out;
 }
 
+function maybeTransformMel(source, options = {}) {
+  if (options.melTransform === false) {
+    return source;
+  }
+  return applyMelTransform(source);
+}
+
 function expectedLabelFromFilename(name) {
   const lower = String(name || '').toLowerCase();
   if (lower.includes('start')) return 'dexter_start';
   if (lower.includes('stop')) return 'dexter_stop';
   if (lower.includes('abort')) return 'dexter_abort';
   return 'unrelated';
+}
+
+function summarizeSeries(values) {
+  if (!values.length) {
+    return { peak: 0, mean: 0, p95: 0, peakFrame: -1, n: 0 };
+  }
+  let peak = values[0];
+  let peakFrame = 0;
+  let sum = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const v = values[i];
+    sum += v;
+    if (v > peak) {
+      peak = v;
+      peakFrame = i;
+    }
+  }
+  const sorted = Array.from(values).sort((a, b) => a - b);
+  const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+  return {
+    peak,
+    mean: sum / values.length,
+    p95,
+    peakFrame,
+    n: values.length,
+  };
 }
 
 async function initSessions(config) {
@@ -122,18 +156,21 @@ async function initSessions(config) {
   cooldownMs = { ...cooldownMs, ...(config.cooldownMs || {}) };
   patienceFrames = { ...patienceFrames, ...(config.patienceFrames || {}) };
   warmupMs = Number.isFinite(config.warmupMs) ? config.warmupMs : warmupMs;
+  defaultMelHop = Number.isFinite(config.melHop) ? Math.max(1, Number(config.melHop)) : defaultMelHop;
   resetState();
 }
 
-async function runInference(chunk, emitEvents = true) {
+async function runInference(chunk, emitEvents = true, options = {}) {
   if (chunk.length !== FRAME_SIZE) {
-    return;
+    return [];
   }
+  const windowScores = [];
+  const melHop = Math.max(1, Number(options.melHop || defaultMelHop));
 
   const melspecInput = new ort.Tensor('float32', chunk, [1, FRAME_SIZE]);
   const melspecOutputMap = await melspecSession.run({ [melspecSession.inputNames[0]]: melspecInput });
   const melRaw = melspecOutputMap[melspecSession.outputNames[0]].data;
-  const melData = applyMelTransform(melRaw);
+  const melData = maybeTransformMel(melRaw, options);
 
   for (let i = 0; i < 5; i += 1) {
     melBuffer.push(new Float32Array(melData.subarray(i * 32, (i + 1) * 32)));
@@ -226,6 +263,11 @@ async function runInference(chunk, emitEvents = true) {
         },
       });
     }
+    windowScores.push({
+      dexter_start: scorePayload.dexter_start,
+      dexter_stop: scorePayload.dexter_stop,
+      dexter_abort: scorePayload.dexter_abort,
+    });
     inferenceWindows += 1;
 
     if (emitEvents && inferenceWindows % 5 === 0) {
@@ -246,42 +288,191 @@ async function runInference(chunk, emitEvents = true) {
       });
     }
 
-    melBuffer.splice(0, 8);
+    melBuffer.splice(0, melHop);
   }
+  return windowScores;
 }
 
 async function runBenchmarkSamples(files) {
   const results = [];
 
   for (const file of files) {
-    const samples = file.samples;
-    if (!(samples instanceof Float32Array)) {
-      throw new Error(`benchmark sample payload missing Float32Array for file=${file.name}`);
-    }
-    resetState();
+    const variants = Array.isArray(file.variants) ? file.variants : [file];
+    const variantResults = [];
 
-    for (let i = 0; i < samples.length; i += FRAME_SIZE) {
-      const chunk = new Float32Array(FRAME_SIZE);
-      const slice = samples.subarray(i, Math.min(i + FRAME_SIZE, samples.length));
-      chunk.set(slice, 0);
-      await runInference(chunk, false);
+    for (const variant of variants) {
+      const samples = variant.samples;
+      if (!(samples instanceof Float32Array)) {
+        throw new Error(`benchmark sample payload missing Float32Array for file=${file.name}`);
+      }
+      const trace = {
+        dexter_start: [],
+        dexter_stop: [],
+        dexter_abort: [],
+      };
+
+      const sampleOffset = Number(variant.sampleOffset || 0);
+      const frameStep = Math.max(1, Number(variant.inferenceOptions?.frameStep || FRAME_SIZE));
+      resetState();
+      for (let i = sampleOffset; i < samples.length; i += frameStep) {
+        const chunk = new Float32Array(FRAME_SIZE);
+        const slice = samples.subarray(i, Math.min(i + FRAME_SIZE, samples.length));
+        chunk.set(slice, 0);
+        const chunkScores = await runInference(chunk, false, variant.inferenceOptions || {});
+        for (const score of chunkScores) {
+          trace.dexter_start.push(score.dexter_start);
+          trace.dexter_stop.push(score.dexter_stop);
+          trace.dexter_abort.push(score.dexter_abort);
+        }
+      }
+
+      const peaks = { ...peakScores };
+      const winner = Object.entries(peaks).reduce((a, b) => (a[1] >= b[1] ? a : b))[0];
+      variantResults.push({
+        variant: variant.variant || 'unknown',
+        sampleRateInput: Number(variant.sampleRateInput || 16000),
+        sampleRateRuntime: Number(variant.sampleRateRuntime || 16000),
+        durationSec16k: Number((samples.length / 16000).toFixed(4)),
+        frameStep,
+        signalStats: variant.signalStats || null,
+        winnerByPeak: winner,
+        scores: {
+          dexter_start: summarizeSeries(trace.dexter_start),
+          dexter_stop: summarizeSeries(trace.dexter_stop),
+          dexter_abort: summarizeSeries(trace.dexter_abort),
+        },
+        trace:
+          String(file.name || '').toLowerCase().includes('stop2')
+            ? {
+                dexter_start: trace.dexter_start,
+                dexter_stop: trace.dexter_stop,
+                dexter_abort: trace.dexter_abort,
+              }
+            : undefined,
+      });
     }
 
-    const peaks = { ...peakScores };
-    const winner = Object.entries(peaks).reduce((a, b) => (a[1] >= b[1] ? a : b))[0];
+    let offsetSweep = null;
+    let melHopSweep = null;
+    const fileNameLower = String(file.name || '').toLowerCase();
+    if (fileNameLower.includes('dexter_stop2')) {
+      const baseVariant =
+        variantResults.find((v) => v.variant === 'js_prepared_mel_on') ||
+        variantResults[0];
+      const sourceVariant = variants.find((v) => v.variant === baseVariant?.variant);
+      if (sourceVariant?.samples instanceof Float32Array) {
+        const offsets = [0, 160, 320, 480, 640, 800, 960, 1120];
+        const rows = [];
+        for (const sampleOffset of offsets) {
+          resetState();
+          const trace = [];
+          for (let i = sampleOffset; i < sourceVariant.samples.length; i += FRAME_SIZE) {
+            const chunk = new Float32Array(FRAME_SIZE);
+            const slice = sourceVariant.samples.subarray(
+              i,
+              Math.min(i + FRAME_SIZE, sourceVariant.samples.length)
+            );
+            chunk.set(slice, 0);
+            const chunkScores = await runInference(chunk, false, sourceVariant.inferenceOptions || {});
+            for (const score of chunkScores) {
+              trace.push(score.dexter_stop);
+            }
+          }
+          const stopStats = summarizeSeries(trace);
+          rows.push({
+            sampleOffset,
+            stopPeak: stopStats.peak,
+            stopMean: stopStats.mean,
+            stopPeakFrame: stopStats.peakFrame,
+            n: stopStats.n,
+          });
+        }
+        const best = rows.reduce((acc, row) => (row.stopPeak > acc.stopPeak ? row : acc), rows[0]);
+        offsetSweep = {
+          variant: sourceVariant.variant,
+          offsets: rows,
+          best,
+        };
+
+        const hops = [1, 2, 3, 4, 5, 6, 7, 8];
+        const hopRows = [];
+        for (const melHop of hops) {
+          resetState();
+          const stopTrace = [];
+          for (let i = 0; i < sourceVariant.samples.length; i += FRAME_SIZE) {
+            const chunk = new Float32Array(FRAME_SIZE);
+            const slice = sourceVariant.samples.subarray(
+              i,
+              Math.min(i + FRAME_SIZE, sourceVariant.samples.length)
+            );
+            chunk.set(slice, 0);
+            const chunkScores = await runInference(chunk, false, {
+              ...(sourceVariant.inferenceOptions || {}),
+              melHop,
+              frameStep: FRAME_SIZE,
+            });
+            for (const score of chunkScores) {
+              stopTrace.push(score.dexter_stop);
+            }
+          }
+          const stopStats = summarizeSeries(stopTrace);
+          hopRows.push({
+            melHop,
+            stopPeak: stopStats.peak,
+            stopMean: stopStats.mean,
+            stopPeakFrame: stopStats.peakFrame,
+            n: stopStats.n,
+          });
+        }
+        const bestHop = hopRows.reduce((acc, row) => (row.stopPeak > acc.stopPeak ? row : acc), hopRows[0]);
+        melHopSweep = {
+          variant: sourceVariant.variant,
+          hops: hopRows,
+          best: bestHop,
+        };
+      }
+    }
+
+    let diagnostics = null;
+    const jsPrepared = variantResults.find((v) => v.variant === 'js_prepared_mel_on');
+    const pythonGolden = variantResults.find((v) => v.variant === 'python_golden_pcm16_mel_on');
+    if (jsPrepared && pythonGolden) {
+      diagnostics = {
+        stopPeakDelta: jsPrepared.scores.dexter_stop.peak - pythonGolden.scores.dexter_stop.peak,
+        startPeakDelta: jsPrepared.scores.dexter_start.peak - pythonGolden.scores.dexter_start.peak,
+        abortPeakDelta: jsPrepared.scores.dexter_abort.peak - pythonGolden.scores.dexter_abort.peak,
+        stopPeakRatio:
+          pythonGolden.scores.dexter_stop.peak > 0
+            ? jsPrepared.scores.dexter_stop.peak / pythonGolden.scores.dexter_stop.peak
+            : null,
+      };
+    }
+
+    let overlapDiagnostics = null;
+    const baseStep = variantResults.find((v) => v.variant === 'js_prepared_mel_on');
+    const denseStep = variantResults.find((v) => v.variant === 'js_prepared_mel_on_step160');
+    if (baseStep && denseStep) {
+      overlapDiagnostics = {
+        jsStopPeakStep1280: baseStep.scores.dexter_stop.peak,
+        jsStopPeakStep160: denseStep.scores.dexter_stop.peak,
+        jsStopPeakRatioStep160Over1280:
+          baseStep.scores.dexter_stop.peak > 0
+            ? denseStep.scores.dexter_stop.peak / baseStep.scores.dexter_stop.peak
+            : null,
+        jsStartPeakStep1280: baseStep.scores.dexter_start.peak,
+        jsStartPeakStep160: denseStep.scores.dexter_start.peak,
+      };
+    }
+
     results.push({
       file: file.name,
-      expected: expectedLabelFromFilename(file.name),
-      sampleRateInput: Number(file.sampleRateInput || 16000),
-      sampleRateRuntime: Number(file.sampleRateRuntime || 16000),
+      expected: file.expected || expectedLabelFromFilename(file.name),
       chunkSamples: FRAME_SIZE,
-      durationSec16k: Number((samples.length / 16000).toFixed(4)),
-      winnerByPeak: winner,
-      scores: {
-        dexter_start: { peak: peaks.dexter_start },
-        dexter_stop: { peak: peaks.dexter_stop },
-        dexter_abort: { peak: peaks.dexter_abort },
-      },
+      variants: variantResults,
+      diagnostics,
+      overlapDiagnostics,
+      offsetSweep,
+      melHopSweep,
     });
   }
 
