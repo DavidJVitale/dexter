@@ -8,16 +8,22 @@ const transcriptEl = document.getElementById("transcript");
 const responseTextEl = document.getElementById("response-text");
 const responseAudioEl = document.getElementById("response-audio");
 const eventLogEl = document.getElementById("event-log");
+const debugLogsEnabledCheckbox = document.getElementById("debug-logs-enabled");
 
 const enableMicButton = document.getElementById("enable-mic");
 const startButton = document.getElementById("start-capture");
 const stopButton = document.getElementById("stop-capture");
 const abortButton = document.getElementById("abort-capture");
-const benchmarkFilesInput = document.getElementById("benchmark-files");
-const runBenchmarkButton = document.getElementById("run-benchmark");
 
 let currentRequestId = null;
 let currentState = "idle";
+const NON_DEBUG_LOG_TYPES = new Set([
+  "wakeword_init",
+  "wakeword_ready",
+  "mic",
+  "wakeword_hit",
+  "wakeword_error",
+]);
 
 function makeRequestId() {
   if (crypto.randomUUID) {
@@ -27,6 +33,10 @@ function makeRequestId() {
 }
 
 function logEvent(type, payload) {
+  const debugEnabled = Boolean(debugLogsEnabledCheckbox?.checked);
+  if (!debugEnabled && !NON_DEBUG_LOG_TYPES.has(type)) {
+    return;
+  }
   const line = `${new Date().toISOString()} ${type} ${JSON.stringify(payload)}`;
   eventLogEl.textContent = `${line}\n${eventLogEl.textContent}`;
 }
@@ -125,16 +135,8 @@ wakeword.on("ready", (payload) => {
 
 wakeword.on("hit", (payload) => {
   logEvent("wakeword_hit", payload);
-  if (payload.label === "dexter" || payload.label === "hey_jarvis_v0_1") {
+  if (payload.label === "dexter") {
     beginCapture("wakeword");
-    return;
-  }
-  if (payload.label === "dexter_stop") {
-    stopCapture("wakeword");
-    return;
-  }
-  if (payload.label === "dexter_abort") {
-    abortCapture("wakeword");
   }
 });
 
@@ -144,15 +146,6 @@ wakeword.on("trace", (payload) => {
 
 wakeword.on("error", (payload) => {
   logEvent("wakeword_error", payload);
-});
-
-wakeword.on("benchmark_result", (payload) => {
-  logEvent("wakeword_benchmark_result", payload);
-  try {
-    logEvent("wakeword_benchmark_json", JSON.parse(JSON.stringify(payload)));
-  } catch (_error) {
-    // no-op
-  }
 });
 
 startButton.addEventListener("click", () => {
@@ -165,17 +158,6 @@ stopButton.addEventListener("click", () => {
 
 abortButton.addEventListener("click", () => {
   abortCapture("manual");
-});
-
-runBenchmarkButton.addEventListener("click", async () => {
-  const files = Array.from(benchmarkFilesInput?.files || []);
-  if (files.length === 0) {
-    logEvent("wakeword_benchmark", { status: "no_files_selected" });
-    return;
-  }
-  await wakeword.initialize();
-  logEvent("wakeword_benchmark", { status: "started", files: files.map((f) => f.name) });
-  await wakeword.runWavBenchmark(files);
 });
 
 async function initializeOnPageLoad() {

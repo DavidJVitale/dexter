@@ -25,19 +25,15 @@ test('ring buffer keeps latest N embeddings', () => {
 
 test('normalizeScoreMap maps model names to dexter labels', () => {
   const normalized = normalizeScoreMap({
-    dexter_start_v1: 0.5,
-    dexter_stop_v1: 0.1,
-    dexter_abort_v1: 0.9,
+    dexter_v1: 0.5,
   });
-  assert.equal(normalized.dexter_start, 0.5);
-  assert.equal(normalized.dexter_stop, 0.1);
-  assert.equal(normalized.dexter_abort, 0.9);
+  assert.equal(normalized.dexter, 0.5);
 });
 
 test('shouldEmitHit respects threshold and cooldown', () => {
   const now = 10_000;
   const hit1 = shouldEmitHit({
-    label: 'dexter_start',
+    label: 'dexter',
     score: 0.7,
     threshold: 0.6,
     nowMs: now,
@@ -47,7 +43,7 @@ test('shouldEmitHit respects threshold and cooldown', () => {
   assert.equal(hit1, true);
 
   const hit2 = shouldEmitHit({
-    label: 'dexter_start',
+    label: 'dexter',
     score: 0.7,
     threshold: 0.6,
     nowMs: now,

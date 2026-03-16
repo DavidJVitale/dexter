@@ -33,19 +33,12 @@ export function makeRingBuffer(capacity) {
 
 export function normalizeScoreMap(rawScores) {
   const out = {
-    dexter_start: 0,
-    dexter_stop: 0,
-    dexter_abort: 0,
+    dexter: 0,
   };
 
   for (const [key, value] of Object.entries(rawScores || {})) {
-    const lower = key.toLowerCase();
-    if (lower.includes('start')) {
-      out.dexter_start = Number(value) || 0;
-    } else if (lower.includes('stop')) {
-      out.dexter_stop = Number(value) || 0;
-    } else if (lower.includes('abort')) {
-      out.dexter_abort = Number(value) || 0;
+    if (String(key).toLowerCase().includes('dexter')) {
+      out.dexter = Number(value) || 0;
     }
   }
 
