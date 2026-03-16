@@ -125,7 +125,7 @@ wakeword.on("ready", (payload) => {
 
 wakeword.on("hit", (payload) => {
   logEvent("wakeword_hit", payload);
-  if (payload.label === "dexter_start") {
+  if (payload.label === "dexter" || payload.label === "hey_jarvis_v0_1") {
     beginCapture("wakeword");
     return;
   }

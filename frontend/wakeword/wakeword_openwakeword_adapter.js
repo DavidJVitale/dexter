@@ -4,6 +4,11 @@ const DEFAULT_BACKEND_ORIGIN =
   window.location.port === '5173'
     ? `${window.location.protocol}//${window.location.hostname}:5050`
     : window.location.origin;
+const PRIMARY_WAKEWORD_MODEL_PATHS = {
+  dexter: '/models/wakewords/dexter.onnx',
+  alexa_v0_1: '/models/openwakeword_resources/alexa_v0.1.onnx',
+  hey_jarvis_v0_1: '/models/openwakeword_resources/hey_jarvis_v0.1.onnx',
+};
 
 export class OpenWakeWordAdapter {
   constructor(config = {}) {
@@ -67,31 +72,41 @@ export class OpenWakeWordAdapter {
       this.emit(type, payload);
     };
 
+    const wakewordModelUrls = Object.fromEntries(
+      Object.entries({
+        ...PRIMARY_WAKEWORD_MODEL_PATHS,
+        ...(this.config.wakewordModelUrls || {}),
+      }).map(([label, pathOrUrl]) => {
+        const asString = String(pathOrUrl || "");
+        const isAbsolute = /^https?:\/\//i.test(asString);
+        return [label, isAbsolute ? asString : `${backendOrigin}${asString}`];
+      })
+    );
+    const defaultThresholds = {
+      dexter: 0.6,
+      alexa_v0_1: 0.6,
+      hey_jarvis_v0_1: 0.6,
+    };
+    const defaultCooldownMs = {
+      dexter: 1000,
+      alexa_v0_1: 1000,
+      hey_jarvis_v0_1: 1000,
+    };
+    const defaultPatienceFrames = {
+      dexter: 2,
+      alexa_v0_1: 2,
+      hey_jarvis_v0_1: 2,
+    };
+
     this.worker.postMessage({
       type: 'init',
       payload: {
         melspecModelUrl: `${backendOrigin}/models/openwakeword_resources/melspectrogram.onnx`,
         embeddingModelUrl: `${backendOrigin}/models/openwakeword_resources/embedding_model.onnx`,
-        wakewordModelUrls: {
-          dexter_start: `${backendOrigin}/models/wakewords/dexter_start.onnx`,
-          dexter_stop: `${backendOrigin}/models/wakewords/dexter_stop.onnx`,
-          dexter_abort: `${backendOrigin}/models/wakewords/dexter_abort.onnx`,
-        },
-        thresholds: {
-          dexter_start: 0.56,
-          dexter_stop: 0.66,
-          dexter_abort: 0.66,
-        },
-        cooldownMs: {
-          dexter_start: 1000,
-          dexter_stop: 1000,
-          dexter_abort: 1000,
-        },
-        patienceFrames: {
-          dexter_start: 2,
-          dexter_stop: 2,
-          dexter_abort: 2,
-        },
+        wakewordModelUrls,
+        thresholds: { ...defaultThresholds, ...(this.config.thresholds || {}) },
+        cooldownMs: { ...defaultCooldownMs, ...(this.config.cooldownMs || {}) },
+        patienceFrames: { ...defaultPatienceFrames, ...(this.config.patienceFrames || {}) },
         warmupMs: 1500,
         melHop: 5,
       },

@@ -20,43 +20,43 @@ const FRAME_SIZE = 1280;
 let melspecSession = null;
 let embeddingSession = null;
 let wakewordSessions = {};
+let wakewordLabels = ['dexter_start', 'dexter_stop', 'dexter_abort'];
 
 let melBuffer = [];
 let embeddingBuffer = [];
-let thresholds = {
-  dexter_start: 0.56,
-  dexter_stop: 0.66,
-  dexter_abort: 0.66,
-};
-let cooldownMs = {
-  dexter_start: 1000,
-  dexter_stop: 1000,
-  dexter_abort: 1000,
-};
-let patienceFrames = {
-  dexter_start: 2,
-  dexter_stop: 2,
-  dexter_abort: 2,
-};
+let thresholds = {};
+let cooldownMs = {};
+let patienceFrames = {};
 let warmupMs = 1500;
 let defaultMelHop = 8;
-let lastHitMs = {
-  dexter_start: 0,
-  dexter_stop: 0,
-  dexter_abort: 0,
-};
-let aboveThresholdFrames = {
-  dexter_start: 0,
-  dexter_stop: 0,
-  dexter_abort: 0,
-};
-let peakScores = {
-  dexter_start: 0,
-  dexter_stop: 0,
-  dexter_abort: 0,
-};
+let lastHitMs = {};
+let aboveThresholdFrames = {};
+let peakScores = {};
 let sessionStartMs = 0;
 let inferenceWindows = 0;
+
+function mapByLabels(valueFactory) {
+  const out = {};
+  for (const label of wakewordLabels) {
+    out[label] = valueFactory(label);
+  }
+  return out;
+}
+
+function defaultThresholdForLabel(label) {
+  if (label === 'dexter_start') return 0.56;
+  if (label === 'dexter_stop') return 0.66;
+  if (label === 'dexter_abort') return 0.66;
+  return 0.6;
+}
+
+function defaultPatienceForLabel(_label) {
+  return 2;
+}
+
+function defaultCooldownForLabel(_label) {
+  return 1000;
+}
 
 function postError(code, message, detail = null) {
   self.postMessage({
@@ -70,16 +70,8 @@ function resetState() {
   embeddingBuffer = [];
   inferenceWindows = 0;
   sessionStartMs = Date.now();
-  aboveThresholdFrames = {
-    dexter_start: 0,
-    dexter_stop: 0,
-    dexter_abort: 0,
-  };
-  peakScores = {
-    dexter_start: 0,
-    dexter_stop: 0,
-    dexter_abort: 0,
-  };
+  aboveThresholdFrames = mapByLabels(() => 0);
+  peakScores = mapByLabels(() => 0);
   for (let i = 0; i < 16; i += 1) {
     embeddingBuffer.push(new Float32Array(96));
   }
@@ -146,15 +138,29 @@ async function initSessions(config) {
   melspecSession = await ort.InferenceSession.create(config.melspecModelUrl, sessionOptions);
   embeddingSession = await ort.InferenceSession.create(config.embeddingModelUrl, sessionOptions);
 
-  wakewordSessions = {
-    dexter_start: await ort.InferenceSession.create(config.wakewordModelUrls.dexter_start, sessionOptions),
-    dexter_stop: await ort.InferenceSession.create(config.wakewordModelUrls.dexter_stop, sessionOptions),
-    dexter_abort: await ort.InferenceSession.create(config.wakewordModelUrls.dexter_abort, sessionOptions),
-  };
+  const wakewordModelUrls = config.wakewordModelUrls || {};
+  wakewordSessions = {};
+  for (const [label, modelUrl] of Object.entries(wakewordModelUrls)) {
+    wakewordSessions[label] = await ort.InferenceSession.create(modelUrl, sessionOptions);
+  }
+  wakewordLabels = Object.keys(wakewordSessions);
+  if (wakewordLabels.length === 0) {
+    throw new Error('No wakeword models configured');
+  }
 
-  thresholds = { ...thresholds, ...(config.thresholds || {}) };
-  cooldownMs = { ...cooldownMs, ...(config.cooldownMs || {}) };
-  patienceFrames = { ...patienceFrames, ...(config.patienceFrames || {}) };
+  thresholds = {
+    ...mapByLabels((label) => defaultThresholdForLabel(label)),
+    ...(config.thresholds || {}),
+  };
+  cooldownMs = {
+    ...mapByLabels((label) => defaultCooldownForLabel(label)),
+    ...(config.cooldownMs || {}),
+  };
+  patienceFrames = {
+    ...mapByLabels((label) => defaultPatienceForLabel(label)),
+    ...(config.patienceFrames || {}),
+  };
+  lastHitMs = mapByLabels(() => 0);
   warmupMs = Number.isFinite(config.warmupMs) ? config.warmupMs : warmupMs;
   defaultMelHop = Number.isFinite(config.melHop) ? Math.max(1, Number(config.melHop)) : defaultMelHop;
   resetState();
@@ -196,18 +202,10 @@ async function runInference(chunk, emitEvents = true, options = {}) {
 
     const wakewordInput = new ort.Tensor('float32', flattenedEmbeddings, [1, 16, 96]);
 
-    const scorePayload = {
-      dexter_start: 0,
-      dexter_stop: 0,
-      dexter_abort: 0,
-    };
+    const scorePayload = mapByLabels(() => 0);
     const nowMs = Date.now();
     const warmedUp = nowMs - sessionStartMs >= warmupMs;
-    const abovePayload = {
-      dexter_start: false,
-      dexter_stop: false,
-      dexter_abort: false,
-    };
+    const abovePayload = mapByLabels(() => false);
 
     for (const [label, session] of Object.entries(wakewordSessions)) {
       const outputMap = await session.run({ [session.inputNames[0]]: wakewordInput });
@@ -223,26 +221,26 @@ async function runInference(chunk, emitEvents = true, options = {}) {
             ts: nowMs,
             label,
             score,
-            threshold: thresholds[label],
-            aboveThresholdFrames: aboveThresholdFrames[label],
+            threshold: thresholds[label] ?? null,
+            aboveThresholdFrames: aboveThresholdFrames[label] ?? 0,
             warmedUp,
           },
         });
       }
 
-      if (score > thresholds[label]) {
+      if (score > (thresholds[label] ?? Number.POSITIVE_INFINITY)) {
         aboveThresholdFrames[label] += 1;
         abovePayload[label] = true;
       } else {
         aboveThresholdFrames[label] = 0;
       }
 
-      const patienceSatisfied = aboveThresholdFrames[label] >= patienceFrames[label];
+      const patienceSatisfied = aboveThresholdFrames[label] >= (patienceFrames[label] ?? 1);
       if (
         emitEvents &&
         warmedUp &&
         patienceSatisfied &&
-        nowMs - lastHitMs[label] >= cooldownMs[label]
+        nowMs - lastHitMs[label] >= (cooldownMs[label] ?? 0)
       ) {
         lastHitMs[label] = nowMs;
         self.postMessage({
