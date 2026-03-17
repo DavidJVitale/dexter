@@ -17,6 +17,10 @@ const abortButton = document.getElementById("abort-capture");
 
 let currentRequestId = null;
 let currentState = "idle";
+let latestResponseText = "";
+let captureStartedAtMs = 0;
+let speechDetected = false;
+let lastSpeechAtMs = 0;
 const NON_DEBUG_LOG_TYPES = new Set([
   "wakeword_init",
   "wakeword_ready",
@@ -24,6 +28,10 @@ const NON_DEBUG_LOG_TYPES = new Set([
   "wakeword_hit",
   "wakeword_error",
 ]);
+const AUTO_STOP_MIN_CAPTURE_MS = 500;
+const AUTO_STOP_MAX_CAPTURE_MS = 8000;
+const AUTO_STOP_SILENCE_MS = 1200;
+const SPEECH_RMS_THRESHOLD = 0.02;
 
 function makeRequestId() {
   if (crypto.randomUUID) {
@@ -55,6 +63,9 @@ function beginCapture(trigger = "manual") {
   requestIdEl.textContent = currentRequestId;
   transcriptEl.textContent = "(none)";
   responseTextEl.textContent = "(none)";
+  captureStartedAtMs = Date.now();
+  speechDetected = false;
+  lastSpeechAtMs = captureStartedAtMs;
 
   audioCapture.startCapture();
   socket.emit("start_capture", { session_id: socket.id, request_id: currentRequestId });
@@ -79,6 +90,49 @@ function abortCapture(trigger = "manual") {
   logEvent("abort_capture", { request_id: currentRequestId, trigger });
 }
 
+function maybeAutoStopCapture(chunkPayload) {
+  if (!currentRequestId || currentState !== "listening") {
+    return;
+  }
+  const nowMs = Date.now();
+  const captureDurationMs = nowMs - captureStartedAtMs;
+  const rms = Number(chunkPayload?.rms || 0);
+
+  if (rms >= SPEECH_RMS_THRESHOLD) {
+    speechDetected = true;
+    lastSpeechAtMs = nowMs;
+  }
+
+  if (captureDurationMs >= AUTO_STOP_MAX_CAPTURE_MS) {
+    stopCapture("max_duration");
+    return;
+  }
+
+  if (!speechDetected || captureDurationMs < AUTO_STOP_MIN_CAPTURE_MS) {
+    return;
+  }
+
+  if (nowMs - lastSpeechAtMs >= AUTO_STOP_SILENCE_MS) {
+    stopCapture("silence");
+  }
+}
+
+function speakFallbackText(text) {
+  const utteranceText = String(text || "").trim();
+  if (!utteranceText || !window.speechSynthesis) {
+    return;
+  }
+  try {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(utteranceText));
+    logEvent("response_audio_fallback_tts", { text_len: utteranceText.length });
+  } catch (error) {
+    logEvent("response_audio_fallback_tts_error", {
+      message: error?.message || String(error),
+    });
+  }
+}
+
 const socket = createSocketClient();
 const wakeword = new OpenWakeWordAdapter();
 const audioCapture = new AudioCapture({
@@ -87,6 +141,7 @@ const audioCapture = new AudioCapture({
       return;
     }
     socket.emit("audio_chunk", { ...chunkPayload, request_id: currentRequestId });
+    maybeAutoStopCapture(chunkPayload);
   },
 });
 
@@ -109,13 +164,21 @@ socket.on("transcript", (payload) => {
 });
 
 socket.on("response_text", (payload) => {
-  responseTextEl.textContent = payload.text || "(none)";
+  latestResponseText = payload.text || "";
+  responseTextEl.textContent = latestResponseText || "(none)";
   logEvent("response_text", payload);
 });
 
 socket.on("response_audio", (payload) => {
   responseAudioEl.src = `data:${payload.mime};base64,${payload.b64}`;
-  responseAudioEl.play().catch(() => {});
+  responseAudioEl.play().catch((error) => {
+    logEvent("response_audio_play_error", {
+      request_id: payload.request_id,
+      mime: payload.mime,
+      message: error?.message || String(error),
+    });
+    speakFallbackText(latestResponseText);
+  });
   logEvent("response_audio", { request_id: payload.request_id, mime: payload.mime });
 });
 

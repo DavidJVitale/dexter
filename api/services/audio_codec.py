@@ -11,6 +11,18 @@ def bytes_to_b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
+def pcm16_mono_to_wav_bytes(pcm16_bytes: bytes, sample_rate: int = 16_000) -> bytes:
+    if not pcm16_bytes:
+        return b""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm16_bytes)
+    return buffer.getvalue()
+
+
 def synthesize_tone_wav(text: str, sample_rate: int = 16_000) -> bytes:
     duration_sec = min(2.5, max(0.35, 0.35 + (len(text) * 0.015)))
     total_frames = int(sample_rate * duration_sec)

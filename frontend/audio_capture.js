@@ -16,6 +16,18 @@ function bytesToBase64(bytes) {
   return btoa(bin);
 }
 
+function computeRms(floatBuffer) {
+  if (!floatBuffer.length) {
+    return 0;
+  }
+  let sumSq = 0;
+  for (let i = 0; i < floatBuffer.length; i += 1) {
+    const v = floatBuffer[i];
+    sumSq += v * v;
+  }
+  return Math.sqrt(sumSq / floatBuffer.length);
+}
+
 export class AudioCapture {
   constructor({ onChunk }) {
     this.onChunk = onChunk;
@@ -50,6 +62,7 @@ export class AudioCapture {
         channels: 1,
         format: "pcm16",
         pcm_b64: bytesToBase64(bytes),
+        rms: computeRms(input),
       };
       this.seq += 1;
       this.onChunk(payload);
