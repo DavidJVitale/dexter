@@ -9,7 +9,6 @@ from flask_socketio import SocketIO
 
 from .config import AppConfig
 from .routes.health import bp as health_bp
-from .routes.socket_events import register_socket_events
 
 
 def _configure_logging(log_dir: Path) -> None:
@@ -29,6 +28,8 @@ def _configure_logging(log_dir: Path) -> None:
 def create_app() -> Flask:
     config = AppConfig()
     _configure_logging(Path(config.log_dir))
+    os.environ.setdefault("HF_HOME", config.hf_home)
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", config.hf_hub_cache)
 
     frontend_dir = Path(__file__).resolve().parents[1] / "frontend"
     models_dir = Path(__file__).resolve().parents[1] / "models"
@@ -63,6 +64,8 @@ def create_app() -> Flask:
 
 
 def create_socketio(app: Flask) -> SocketIO:
+    from .routes.socket_events import register_socket_events
+
     socketio = SocketIO(
         app,
         async_mode="threading",
