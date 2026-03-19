@@ -1,10 +1,15 @@
 # Dexter
 
-Dexter is a local-first voice assistant prototype built to run end to end on a single Apple Silicon laptop (2024 M3 Macbook Air, 24Gb RAM to start). 
+Dexter is an AI voice assistant prototype built to run **100% locally on consumer hardware**. Working right now a single Apple Silicon laptop (2024 M3 Macbook Air, 24Gb RAM), headless edge device support soon.
+
+## 🎥 [Watch the Video Demo (with audio)](https://youtu.be/5lL7rom7XGA)
+
+[![](./assets/dexter_demo.gif)](https://youtu.be/5lL7rom7XGA)
+
 
 Wake word detection of `dexter` runs in the browser, audio is streamed to a small Python backend, and the backend owns the speech-to-text, language model, external system tool calls, and text-to-speech pipeline.
 
-One of the main design decisions is to keep the backend wake-engine agnostic. The next steps are to run a simple on-premise inference server, with headless edge devices that do the wake word detection. Eventual goal would be to replace my house's proprietary Alexa devices with Dexter.
+One of the main design decisions is to keep the backend wake-engine agnostic. The next steps are to run a simple on-premise inference server, with headless edge devices that do the wake word detection. Eventual goal would be to replace my house's proprietary voice assistant devices with Dexter.
 
 ## Local-First Runtime Architecture
 

@@ -30,6 +30,9 @@ let speechDetected = false;
 let lastSpeechAtMs = 0;
 let currentVisualMode = "engineering";
 let visualStateOverride = null;
+let iconSpinFrame = null;
+let iconRotationDeg = 0;
+let lastSpinTimestamp = 0;
 const NON_DEBUG_LOG_TYPES = new Set([
   "wakeword_init",
   "wakeword_ready",
@@ -99,6 +102,42 @@ function setIconColor(color) {
   sleekIcon.style.color = color;
 }
 
+function setIconRotation(degrees) {
+  if (!sleekIcon) {
+    return;
+  }
+  sleekIcon.style.transform = `rotate(${degrees}deg)`;
+}
+
+function stopIconSpin() {
+  if (iconSpinFrame) {
+    cancelAnimationFrame(iconSpinFrame);
+    iconSpinFrame = null;
+  }
+  iconRotationDeg = 0;
+  lastSpinTimestamp = 0;
+  setIconRotation(0);
+}
+
+function spinIconFrame(timestamp) {
+  if (!lastSpinTimestamp) {
+    lastSpinTimestamp = timestamp;
+  }
+  const deltaMs = timestamp - lastSpinTimestamp;
+  lastSpinTimestamp = timestamp;
+  iconRotationDeg += deltaMs * 0.24;
+  setIconRotation(iconRotationDeg);
+  iconSpinFrame = requestAnimationFrame(spinIconFrame);
+}
+
+function startIconSpin() {
+  if (iconSpinFrame) {
+    return;
+  }
+  lastSpinTimestamp = 0;
+  iconSpinFrame = requestAnimationFrame(spinIconFrame);
+}
+
 function setCaptionColor(color) {
   if (!sleekCaption) {
     return;
@@ -122,6 +161,17 @@ function setVisualMode(modeName) {
   setOrbColor(mode.orb);
   setIconColor(mode.icon);
   setCaptionColor("#111111");
+  if (modeName === "sleek_thinking") {
+    if (sleekCaption) {
+      sleekCaption.textContent = "Thinking...";
+    }
+    startIconSpin();
+  } else {
+    stopIconSpin();
+    if (modeName === "sleek_waiting" && sleekCaption && !latestResponseText) {
+      sleekCaption.textContent = "";
+    }
+  }
 }
 
 function getActiveVisualState() {

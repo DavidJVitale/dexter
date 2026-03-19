@@ -143,12 +143,14 @@ pre {
 }
 
 .sleek-icon {
-  width: 52%;
-  height: 52%;
+  width: 68%;
+  height: 68%;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: color 180ms ease;
+  transform: rotate(0deg);
+  transform-origin: center center;
 }
 
 .sleek-icon svg {
