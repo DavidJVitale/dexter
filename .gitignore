@@ -4,6 +4,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.coverage
+coverage/
+htmlcov/
+.cache/
 logs/
 *.egg-info/
 package-lock.json
@@ -13,6 +17,9 @@ frontend/package-lock.json
 frontend/dist/
 *.lock
 PRODUCTION_ENV.env
+.env
+.env.local
+.env.*.local
 
 # Local agent/developer machine env
 CODING_AGENT_ENV.env
@@ -32,5 +39,15 @@ CODING_AGENT_ENV.env
 .vscode/
 .idea/
 Thumbs.db
+tmp/
+temp/
+*.tmp
+*.bak
 
 ai_docs/deepcorelabs_openwake_reference_files/
+
+# Local audio/debug artifacts
+*.wav
+*.aiff
+*.mp3
+*.m4a
