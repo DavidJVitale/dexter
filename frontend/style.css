@@ -22,6 +22,39 @@ body {
   background: linear-gradient(135deg, #f6f8fb, #e9eff8);
   color: var(--text);
   font-family: "Avenir Next", "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+.screen-root {
+  min-height: 100vh;
+  position: relative;
+  transition: background-color 180ms ease;
+}
+
+.menu-button {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 20;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.menu-button span {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: #13202f;
 }
 
 .app {
@@ -86,6 +119,55 @@ pre {
   min-height: 28px;
 }
 
+.sleek-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 26px;
+  padding: 24px;
+}
+
+.sleek-orb {
+  width: min(46vw, 320px);
+  height: min(46vw, 320px);
+  min-width: 180px;
+  min-height: 180px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.14);
+  transition: background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.sleek-icon {
+  width: 52%;
+  height: 52%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 180ms ease;
+}
+
+.sleek-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sleek-caption {
+  width: min(78vw, 760px);
+  min-height: 32px;
+  text-align: center;
+  font-size: clamp(20px, 2.1vw, 28px);
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  color: #111111;
+  transition: color 180ms ease;
+}
+
 @media (max-width: 680px) {
   .controls {
     flex-direction: column;
@@ -93,5 +175,12 @@ pre {
 
   button {
     width: 100%;
+  }
+
+  .menu-button {
+    width: 42px;
+    height: 42px;
+    top: 14px;
+    left: 14px;
   }
 }

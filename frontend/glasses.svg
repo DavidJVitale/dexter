@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Left glasses frame with transparent cutout -->
+  <path fill="#000" fill-rule="evenodd" d="
+    M88 152 A28 28 0 0 1 116 124 H212 A28 28 0 0 1 240 152 V194 A28 28 0 0 1 212 222 H116 A28 28 0 0 1 88 194 Z
+    M114 166 A12 12 0 0 1 126 154 H202 A12 12 0 0 1 214 166 V192 A12 12 0 0 1 202 204 H126 A12 12 0 0 1 114 192 Z
+  "/>
+
+  <!-- Right glasses frame -->
+  <path fill="#000" fill-rule="evenodd" d="
+    M272 152 A28 28 0 0 1 300 124 H396 A28 28 0 0 1 424 152 V194 A28 28 0 0 1 396 222 H300 A28 28 0 0 1 272 194 Z
+    M298 166 A12 12 0 0 1 310 154 H386 A12 12 0 0 1 398 166 V192 A12 12 0 0 1 386 204 H310 A12 12 0 0 1 298 192 Z
+  "/>
+
+  <!-- Bridge -->
+  <rect x="236" y="142" width="40" height="36" rx="6" fill="#000"/>
+
+  <!-- Hinges -->
+  <rect x="74" y="150" width="18" height="34" rx="6" fill="#000"/>
+  <rect x="420" y="150" width="18" height="34" rx="6" fill="#000"/>
+
+  <!-- Mouth + teeth with cutouts -->
+  <path fill="#000" fill-rule="evenodd" d="
+    M165 288 H347 A9 9 0 0 1 356 297 A9 9 0 0 1 347 306 H165 A9 9 0 0 1 156 297 A9 9 0 0 1 165 288 Z
+    M205 306 H307 V364 H205 Z
+    M223 324 H247 V346 H223 Z
+    M265 324 H289 V346 H265 Z
+  "/>
+</svg>

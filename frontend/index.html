@@ -7,48 +7,63 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main class="app">
-      <h1>Dexter Local Assistant</h1>
-      <p class="subtitle">Milestone 1 scaffold: Socket.IO + stubbed pipeline</p>
+    <div id="screen-root" class="screen-root">
+      <button id="mode-menu-button" class="menu-button" aria-label="Toggle visual mode">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
 
-      <section class="panel">
-        <div class="row">
-          <span>State:</span>
-          <span id="state-pill" class="state idle">idle</span>
+      <section id="sleek-shell" class="sleek-shell" hidden>
+        <div id="sleek-orb" class="sleek-orb">
+          <div id="sleek-icon" class="sleek-icon" aria-hidden="true"></div>
         </div>
-        <div class="row">
-          <span>Current Request:</span>
-          <code id="request-id">none</code>
-        </div>
+        <div id="sleek-caption" class="sleek-caption"></div>
       </section>
 
-      <section class="panel controls">
-        <button id="enable-mic">Enable Mic</button>
-        <button id="start-capture">Start Capture</button>
-        <button id="stop-capture">Stop Capture</button>
-        <button id="abort-capture">Abort</button>
-      </section>
+      <main id="engineering-shell" class="app">
+        <h1>Dexter Local Assistant</h1>
+        <p class="subtitle">Milestone 1 scaffold: Socket.IO + stubbed pipeline</p>
 
-      <section class="panel">
-        <h2>Transcript</h2>
-        <pre id="transcript">(none)</pre>
-      </section>
+        <section class="panel">
+          <div class="row">
+            <span>State:</span>
+            <span id="state-pill" class="state idle">idle</span>
+          </div>
+          <div class="row">
+            <span>Current Request:</span>
+            <code id="request-id">none</code>
+          </div>
+        </section>
 
-      <section class="panel">
-        <h2>Response</h2>
-        <pre id="response-text">(none)</pre>
-        <audio id="response-audio" controls></audio>
-      </section>
+        <section class="panel controls">
+          <button id="enable-mic">Enable Mic</button>
+          <button id="start-capture">Start Capture</button>
+          <button id="stop-capture">Stop Capture</button>
+          <button id="abort-capture">Abort</button>
+        </section>
 
-      <section class="panel">
-        <h2>Event Log</h2>
-        <label class="row" for="debug-logs-enabled">
-          <input id="debug-logs-enabled" type="checkbox" />
-          <span>Debug</span>
-        </label>
-        <pre id="event-log"></pre>
-      </section>
-    </main>
+        <section class="panel">
+          <h2>Transcript</h2>
+          <pre id="transcript">(none)</pre>
+        </section>
+
+        <section class="panel">
+          <h2>Response</h2>
+          <pre id="response-text">(none)</pre>
+          <audio id="response-audio" controls></audio>
+        </section>
+
+        <section class="panel">
+          <h2>Event Log</h2>
+          <label class="row" for="debug-logs-enabled">
+            <input id="debug-logs-enabled" type="checkbox" />
+            <span>Debug</span>
+          </label>
+          <pre id="event-log"></pre>
+        </section>
+      </main>
+    </div>
 
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script type="module" src="./app.js"></script>
