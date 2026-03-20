@@ -64,7 +64,7 @@ class LiquidToolRunner:
             parsed_tool_call = self._parse_native_tool_call(raw_output)
             if not parsed_tool_call:
                 final_response = self._sanitize_final_response(raw_output)
-                if not final_response and steps:
+                if self._has_tool_failures(steps):
                     final_response = self._fallback_final_response(steps)
                     traces.append(
                         {
@@ -74,6 +74,16 @@ class LiquidToolRunner:
                         }
                     )
                 else:
+                    if not final_response and steps:
+                        final_response = self._fallback_final_response(steps)
+                        traces.append(
+                            {
+                                "type": "llm_final_response",
+                                "content": final_response,
+                                "fallback": True,
+                            }
+                        )
+                        return ToolLoopOutcome(final_response=final_response, steps=steps, traces=traces)
                     traces.append(
                         {
                             "type": "llm_final_response",
@@ -116,7 +126,18 @@ class LiquidToolRunner:
             )
 
             messages.append({"role": "assistant", "content": raw_output})
-            messages.append({"role": "tool", "content": json.dumps(result.content)})
+            messages.append(
+                {
+                    "role": "tool",
+                    "content": json.dumps(
+                        {
+                            "ok": result.ok,
+                            "content": result.content,
+                            "error": result.error,
+                        }
+                    ),
+                }
+            )
 
         final_response = self._fallback_final_response(steps)
         traces.append(
@@ -165,11 +186,27 @@ class LiquidToolRunner:
 
     def _fallback_final_response(self, steps: list[ToolExecutionStep]) -> str:
         if steps:
+            failed_steps = [step for step in steps if not step.result.ok]
+            if failed_steps:
+                errors = [step.result.error for step in failed_steps if step.result.error]
+                if errors:
+                    unique_errors: list[str] = []
+                    for error in errors:
+                        if error not in unique_errors:
+                            unique_errors.append(error)
+                    return (
+                        "I couldn't complete that because part of the expression is not supported "
+                        "by the calculator tool. "
+                        f"Errors encountered: {'; '.join(unique_errors)}"
+                    )
+                return "I couldn't complete that because the expression is not supported by the calculator tool."
+
             last_step = steps[-1]
             if last_step.result.ok and isinstance(last_step.result.content, dict):
                 result = last_step.result.content.get("result")
                 if result is not None:
                     return f"The answer is {result}."
-            if last_step.result.error:
-                return f"I couldn't complete that calculation: {last_step.result.error}"
         return "I couldn't complete that request."
+
+    def _has_tool_failures(self, steps: list[ToolExecutionStep]) -> bool:
+        return any(not step.result.ok for step in steps)
