@@ -3,6 +3,9 @@ import { createSocketClient } from "./socket_client.js";
 import { OpenWakeWordAdapter } from "./wakeword_openwakeword_adapter.js";
 
 const screenRoot = document.getElementById("screen-root");
+const armOverlay = document.getElementById("arm-overlay");
+const armOverlayButton = document.getElementById("arm-overlay-button");
+const armOverlaySubtitle = document.getElementById("arm-overlay-subtitle");
 const engineeringShell = document.getElementById("engineering-shell");
 const sleekShell = document.getElementById("sleek-shell");
 const sleekOrb = document.getElementById("sleek-orb");
@@ -28,17 +31,31 @@ let latestResponseText = "";
 let captureStartedAtMs = 0;
 let speechDetected = false;
 let lastSpeechAtMs = 0;
-let currentVisualMode = "engineering";
+let currentVisualMode = "sleek";
 let visualStateOverride = null;
 let iconSpinFrame = null;
 let iconRotationDeg = 0;
 let lastSpinTimestamp = 0;
+let micArmed = false;
 const NON_DEBUG_LOG_TYPES = new Set([
+  "connect",
+  "state",
+  "start_capture",
+  "stop_capture",
+  "abort_capture",
   "wakeword_init",
   "wakeword_ready",
   "mic",
   "wakeword_hit",
   "wakeword_error",
+  "transcript",
+  "response_text",
+  "response_audio",
+  "tool_call_start",
+  "tool_call_result",
+  "tool_call_end",
+  "llm_model_output",
+  "llm_final_response",
 ]);
 const AUTO_STOP_MIN_CAPTURE_MS = 500;
 const AUTO_STOP_MAX_CAPTURE_MS = 8000;
@@ -86,6 +103,20 @@ function logEvent(type, payload) {
   }
   const line = `${new Date().toISOString()} ${type} ${JSON.stringify(payload)}`;
   eventLogEl.textContent = `${line}\n${eventLogEl.textContent}`;
+}
+
+function setArmOverlayVisible(visible) {
+  if (!armOverlay) {
+    return;
+  }
+  armOverlay.hidden = !visible;
+}
+
+function setArmOverlayMessage(message) {
+  if (!armOverlaySubtitle) {
+    return;
+  }
+  armOverlaySubtitle.textContent = message;
 }
 
 function setBackgroundColor(color) {
@@ -214,7 +245,6 @@ function clearScreenText() {
     sleekCaption.textContent = "";
   }
   responseAudioEl.removeAttribute("src");
-  eventLogEl.textContent = "";
 }
 
 function setState(state) {
@@ -384,14 +414,61 @@ socket.on("error", (payload) => {
   logEvent("error", payload);
 });
 
-enableMicButton.addEventListener("click", async () => {
+socket.on("tool_call_start", (payload) => {
+  logEvent("tool_call_start", payload);
+});
+
+socket.on("tool_call_result", (payload) => {
+  logEvent("tool_call_result", payload);
+});
+
+socket.on("tool_call_end", (payload) => {
+  logEvent("tool_call_end", payload);
+});
+
+socket.on("llm_model_output", (payload) => {
+  logEvent("llm_model_output", payload);
+});
+
+socket.on("llm_final_response", (payload) => {
+  logEvent("llm_final_response", payload);
+});
+
+async function armDexter() {
+  if (micArmed) {
+    return;
+  }
+  setArmOverlayMessage("Requesting microphone access and starting wake word detection...");
   await audioCapture.initialize();
   await wakeword.start();
+  micArmed = true;
+  setArmOverlayVisible(false);
+  setArmOverlayMessage("Microphone access is required for wake word detection.");
   logEvent("mic", { status: "enabled" });
+}
+
+enableMicButton.addEventListener("click", async () => {
+  try {
+    await armDexter();
+  } catch (error) {
+    setArmOverlayVisible(true);
+    setArmOverlayMessage(error?.message || "Microphone access failed. Tap to try again.");
+    logEvent("wakeword_error", { message: error?.message || String(error) });
+  }
 });
 
 modeMenuButton.addEventListener("click", () => {
   applyShellMode(currentVisualMode === "engineering" ? "sleek" : "engineering");
+});
+
+armOverlayButton.addEventListener("click", async () => {
+  try {
+    await armDexter();
+  } catch (error) {
+    setArmOverlayVisible(true);
+    setArmOverlayMessage(error?.message || "Microphone access failed. Tap to try again.");
+    logEvent("wakeword_error", { message: error?.message || String(error) });
+  }
 });
 
 wakeword.on("ready", (payload) => {
@@ -428,7 +505,8 @@ abortButton.addEventListener("click", () => {
 async function initializeOnPageLoad() {
   try {
     await loadSleekIcon();
-    applyShellMode("engineering");
+    applyShellMode("sleek");
+    setArmOverlayVisible(true);
     await wakeword.initialize();
     logEvent("wakeword_init", { status: "ready" });
   } catch (error) {

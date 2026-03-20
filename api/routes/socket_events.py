@@ -117,6 +117,8 @@ def register_socket_events(socketio: SocketIO) -> None:
             result = _orchestrator.process(audio_bytes)
 
             emit("transcript", {"request_id": request_id, "text": result.transcript})
+            for trace in result.tool_traces:
+                emit(trace["type"], {"request_id": request_id, **trace})
 
             session.state = "thinking"
             _state_emit(request_id, "thinking")

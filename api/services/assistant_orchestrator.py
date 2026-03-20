@@ -13,6 +13,7 @@ class AssistantResult:
     response_text: str
     response_audio_mime: str
     response_audio_b64: str
+    tool_traces: list[dict]
 
 
 class AssistantOrchestrator:
@@ -23,11 +24,12 @@ class AssistantOrchestrator:
 
     def process(self, audio_bytes: bytes) -> AssistantResult:
         transcript = self._stt.transcribe(audio_bytes)
-        response_text = self._llm.generate(transcript)
+        response_text, tool_traces = self._llm.generate(transcript)
         mime, b64_audio = self._tts.synthesize(response_text)
         return AssistantResult(
             transcript=transcript,
             response_text=response_text,
             response_audio_mime=mime,
             response_audio_b64=b64_audio,
+            tool_traces=tool_traces,
         )

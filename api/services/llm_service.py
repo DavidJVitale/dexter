@@ -7,6 +7,10 @@ import threading
 from mlx_lm import generate, load
 from mlx_lm.sample_utils import make_logits_processors, make_sampler
 
+from .calculator_tool import CalculatorTool
+from .liquid_tool_runner import LiquidToolRunner
+from .tool_runtime import ToolRegistry
+
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MODEL_REPO = "LiquidAI/LFM2-24B-A2B-MLX-4bit"
@@ -29,34 +33,24 @@ class LlmService:
         self._temperature = float(os.getenv("DEXTER_LLM_TEMPERATURE", "0.2"))
         self._rep_penalty = float(os.getenv("DEXTER_LLM_REP_PENALTY", "1.05"))
         self._lock = threading.Lock()
+        self._tool_runner = LiquidToolRunner(ToolRegistry([CalculatorTool()]), max_steps=3)
 
         LOGGER.info("Loading MLX LLM model: %s", self._model_repo)
         self._model, self._tokenizer = load(self._model_repo)
         LOGGER.info("MLX LLM model loaded: %s", self._model_repo)
         self._warm_model()
 
-    def generate(self, transcript: str) -> str:
+    def generate(self, transcript: str) -> tuple[str, list[dict]]:
         user_text = (transcript or "").strip()
         if not user_text:
-            return "I didn't catch that. Please say it again."
+            return "I didn't catch that. Please say it again.", []
 
-        with self._lock:
-            prompt = self._build_prompt(user_text)
-            logits_processors = (
-                make_logits_processors(repetition_penalty=self._rep_penalty)
-                if self._rep_penalty > 0
-                else None
-            )
-            response = generate(
-                self._model,
-                self._tokenizer,
-                prompt,
-                max_tokens=self._max_tokens,
-                sampler=make_sampler(temp=self._temperature),
-                logits_processors=logits_processors,
-                verbose=False,
-            )
-        return self._strip_special_tokens(response)
+        outcome = self._tool_runner.run(
+            user_text=user_text,
+            system_prompt=self._system_prompt,
+            model_generate=self._generate_from_messages,
+        )
+        return outcome.final_response, outcome.traces
 
     def _warm_model(self) -> None:
         try:
@@ -89,6 +83,37 @@ class LlmService:
             f"User: {user_text}\n\n"
             "Assistant:"
         )
+
+    def _generate_once(self, prompt: str) -> str:
+        with self._lock:
+            logits_processors = (
+                make_logits_processors(repetition_penalty=self._rep_penalty)
+                if self._rep_penalty > 0
+                else None
+            )
+            response = generate(
+                self._model,
+                self._tokenizer,
+                prompt,
+                max_tokens=self._max_tokens,
+                sampler=make_sampler(temp=self._temperature),
+                logits_processors=logits_processors,
+                verbose=False,
+            )
+        return self._strip_special_tokens(response)
+
+    def _generate_from_messages(self, messages: list[dict[str, str]]) -> str:
+        if getattr(self._tokenizer, "has_chat_template", False):
+            prompt = self._tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+        else:
+            prompt = "\n\n".join(
+                f"{message['role'].capitalize()}: {message['content']}" for message in messages
+            ) + "\n\nAssistant:"
+        return self._generate_once(prompt)
 
     def _strip_special_tokens(self, text: str) -> str:
         cleaned = text or ""
