@@ -18,3 +18,9 @@ Dexter is designed around a simple constraint: the full assistant loop should fi
 The architecture is intentionally modular. Wake word detection, audio streaming, STT, LLM reasoning, tool execution, and TTS are all separated behind clean boundaries so the system can evolve from a browser client today to headless edge microphones later without changing the backend contract. Audio is streamed in small chunks, capture ends on lightweight silence detection, and the server remains agnostic to how wake word detection happens upstream.
 
 Tool use follows the same design philosophy. Rather than binding the project to a model-specific tool API, Dexter is being structured around a small JSON-based tool invocation layer so the local model can call arbitrary backend tools in a controlled way. That makes it possible to add practical capabilities like calculation, read-only calendar access, or explicit external LLM passthrough without coupling the system to one vendor's runtime.
+
+## Interesting Implementation Discoveries
+
+### Failed tool calls were masked, model attempted to respond from weights
+
+One of the more interesting failure modes showed up when the model tried to answer a Fibonacci question using the calculator tool. It generated an expression involving `fibonacci(n)`, but the calculator did not support that function and returned a deterministic tool error. By default, the LLM would ignore the failed tool result and answer anyway from its own weights, **producing a plausible-looking response that was not actually grounded in tool execution**. That is a subtle but important failure mode for local assistants: the system appears to have used a deterministic tool, but in reality it silently fell back to model knowledge. The fix was to treat deterministic tool failures as authoritative and force a grounded failure response instead of allowing an unverified final answer.
